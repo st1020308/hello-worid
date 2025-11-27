@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 圖片去背 (iPad/iOS 優化版)</title>
+    <title>AI 圖片去背 (進度條版)</title>
     <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/imgly-background-removal.min.js"></script>
     <style>
         body {
@@ -14,7 +14,6 @@
             align-items: center;
             padding: 20px;
             color: #333;
-            /* 防止 iOS 橡皮筋效果 */
             overscroll-behavior-y: none;
         }
 
@@ -30,66 +29,87 @@
 
         h1 { margin: 10px 0; font-size: 1.5rem; color: #2c3e50; }
 
-        /* 狀態列 */
-        .status-box {
-            background: #fff3e0;
-            border: 1px solid #ffe0b2;
-            color: #e67e22;
-            padding: 15px;
-            border-radius: 12px;
-            margin: 15px 0;
-            font-size: 14px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            min-height: 50px;
-        }
-        
-        .status-box.ready {
-            background: #e8f8f5;
-            border-color: #d1f2eb;
-            color: #27ae60;
-        }
-        
-        .status-box.error {
-            background: #fadbd8;
-            border-color: #f5b7b1;
-            color: #c0392b;
+        /* 控制面板 */
+        .control-panel {
+            background: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
         }
 
-        .spinner {
-            width: 18px; height: 18px;
-            border: 2px solid rgba(0,0,0,0.1);
-            border-top-color: currentColor;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+        /* 啟動按鈕 */
+        .start-btn {
+            background: #2980b9;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(41, 128, 185, 0.3);
+            transition: transform 0.2s, background 0.2s;
+            display: inline-block;
+            width: 100%;
+            max-width: 300px;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .start-btn:active { transform: scale(0.95); }
+        .start-btn:disabled { background: #bdc3c7; cursor: not-allowed; box-shadow: none; }
+
+        /* 進度條樣式區塊 */
+        .progress-container {
+            display: none; /* 預設隱藏 */
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .progress-label {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 10px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #3498db; /* 藍色 */
+            width: 0%;
+            transition: width 0.3s ease;
+        }
 
         /* 上傳區塊 */
+        .upload-wrapper {
+            opacity: 0.4;
+            pointer-events: none;
+            transition: all 0.5s;
+            filter: grayscale(100%);
+        }
+        
+        .upload-wrapper.enabled {
+            opacity: 1;
+            pointer-events: auto;
+            filter: grayscale(0%);
+        }
+
         .upload-section {
             border: 2px dashed #bdc3c7;
-            padding: 40px 20px;
+            padding: 30px 20px;
             border-radius: 15px;
             position: relative;
             background: #fafafa;
-            transition: all 0.3s;
-            /* 預設禁止互動，直到模型載入完成 */
-            opacity: 0.5;
-            pointer-events: none;
+            margin-bottom: 20px;
         }
 
-        .upload-section.active {
-            border-color: #3498db;
-            background: #fff;
-            opacity: 1;
-            pointer-events: auto;
-            cursor: pointer;
-        }
-
-        /* 覆蓋整個區域的 input，確保 iPad 好點擊 */
         input[type="file"] {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -97,50 +117,29 @@
             cursor: pointer;
         }
 
-        /* 手動啟動按鈕 (當自動失敗時顯示) */
-        #retryBtn {
-            display: none;
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
-            margin-top: 5px;
-        }
-
-        /* 預覽區 */
         .preview-area {
             display: none;
             flex-direction: column;
             gap: 20px;
             margin-top: 20px;
         }
-        
-        /* 平板以上改為並排 */
-        @media (min-width: 600px) {
-            .preview-area { flex-direction: row; }
-        }
+        @media (min-width: 600px) { .preview-area { flex-direction: row; } }
 
         .image-box {
             flex: 1;
             border: 1px solid #eee;
             padding: 10px;
             border-radius: 12px;
-            background: #fff;
         }
 
         img {
             max-width: 100%;
             border-radius: 8px;
-            /* 棋盤格背景 */
             background-image: linear-gradient(45deg, #eee 25%, transparent 25%), 
                               linear-gradient(-45deg, #eee 25%, transparent 25%), 
                               linear-gradient(45deg, transparent 75%, #eee 75%), 
                               linear-gradient(-45deg, transparent 75%, #eee 75%);
             background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
 
         .btn-download {
@@ -152,7 +151,6 @@
             text-decoration: none;
             margin-top: 15px;
             font-weight: bold;
-            box-shadow: 0 4px 6px rgba(39, 174, 96, 0.2);
         }
     </style>
 </head>
@@ -161,16 +159,28 @@
     <div class="container">
         <h1>AI 圖片去背</h1>
         
-        <div id="statusBox" class="status-box">
-            <div class="spinner"></div>
-            <span id="statusText">系統啟動中...</span>
-            <button id="retryBtn" onclick="initModel(true)">👆 點此手動下載 AI 模型</button>
+        <div class="control-panel">
+            <button id="startBtn" class="start-btn" onclick="startLoadingModel()">
+                🚀 點擊下載 AI 模型
+            </button>
+            
+            <div id="progressContainer" class="progress-container">
+                <div class="progress-label">
+                    <span id="progressText">正在連接伺服器...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div id="progressFill" class="progress-bar-fill"></div>
+                </div>
+            </div>
         </div>
 
-        <div class="upload-section" id="uploadSection">
-            <div style="font-size: 40px; margin-bottom: 10px;">📷</div>
-            <p id="uploadText">請稍候，AI 引擎正在暖機...</p>
-            <input type="file" id="fileInput" accept="image/*">
+        <div id="uploadWrapper" class="upload-wrapper">
+            <div class="upload-section">
+                <div style="font-size: 40px; margin-bottom: 10px;">📷</div>
+                <p>模型準備好後，點此選擇圖片</p>
+                <input type="file" id="fileInput" accept="image/*">
+            </div>
         </div>
 
         <div class="preview-area" id="previewArea">
@@ -182,100 +192,93 @@
                 <h3>去背結果</h3>
                 <img id="resultImg" src="" alt="Result">
                 <br>
-                <a id="downloadLink" class="btn-download">下載去背圖片</a>
+                <a id="downloadLink" class="btn-download">下載圖片</a>
             </div>
         </div>
     </div>
 
     <script>
-        const statusBox = document.getElementById('statusBox');
-        const statusText = document.getElementById('statusText');
-        const retryBtn = document.getElementById('retryBtn');
-        const uploadSection = document.getElementById('uploadSection');
-        const uploadText = document.getElementById('uploadText');
+        const startBtn = document.getElementById('startBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const progressPercent = document.getElementById('progressPercent');
+        
+        const uploadWrapper = document.getElementById('uploadWrapper');
         const fileInput = document.getElementById('fileInput');
         const previewArea = document.getElementById('previewArea');
         const originalImg = document.getElementById('originalImg');
         const resultImg = document.getElementById('resultImg');
         const downloadLink = document.getElementById('downloadLink');
 
-        // 使用 jsDelivr CDN，這在台灣連線通常比較快且穩定
-        const CDN_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.5.5/dist/";
-
         const config = {
-            publicPath: CDN_URL,
+            publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.5.5/dist/",
             progress: (key, current, total) => {
+                // 只有在模型準備階段才更新進度條
                 if(isModelReady) return;
-                const percent = total > 0 ? Math.round((current / total) * 100) : 0;
-                statusText.innerText = `📦 正在下載 AI 組件... ${percent}%`;
+
+                if(total > 0) {
+                    const percent = Math.round((current / total) * 100);
+                    // 更新視覺寬度
+                    progressFill.style.width = percent + "%";
+                    progressPercent.innerText = percent + "%";
+                    progressText.innerText = `下載資源中: ${key}`;
+                }
             }
         };
 
         let isModelReady = false;
 
-        // 初始化模型函數
-        async function initModel(isManual = false) {
-            // 如果是手動重試，先隱藏按鈕，顯示載入中
-            if (isManual) {
-                retryBtn.style.display = 'none';
-                statusBox.classList.remove('error');
-                statusBox.querySelector('.spinner').style.display = 'block';
-                statusText.innerText = "嘗試重新連線中...";
-            }
+        async function startLoadingModel() {
+            startBtn.disabled = true;
+            startBtn.style.display = 'none'; // 隱藏按鈕
+            progressContainer.style.display = 'block'; // 顯示進度條
 
             try {
-                // 1. 測試用透明小圖
+                // 暖機
                 const dummyImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-                
-                // 2. 執行預載
                 await imgly.removeBackground(dummyImage, config);
                 
-                // 3. 成功狀態更新
+                // 成功後
                 isModelReady = true;
-                statusBox.classList.remove('error');
-                statusBox.classList.add('ready');
-                statusBox.innerHTML = '✅ AI 準備完成，請選擇照片！';
                 
-                uploadSection.classList.add('active');
-                uploadText.innerHTML = '<b>點擊這裡上傳圖片</b><br><span style="font-size:12px;color:#999">支援 JPG / PNG</span>';
+                // 進度條顯示完成
+                progressFill.style.width = "100%";
+                progressFill.style.backgroundColor = "#27ae60"; // 變綠色
+                progressPercent.innerText = "100%";
+                progressText.innerText = "✅ 模型載入完成！";
                 
+                // 解鎖上傳
+                uploadWrapper.classList.add('enabled');
+
             } catch (error) {
-                console.error("初始化失敗:", error);
+                console.error(error);
+                startBtn.style.display = 'inline-block'; // 顯示按鈕讓使用者重試
+                startBtn.disabled = false;
+                startBtn.innerHTML = "❌ 失敗 - 點此重試";
                 
-                // 失敗狀態更新
-                isModelReady = false;
-                statusBox.classList.add('error');
-                statusBox.querySelector('.spinner').style.display = 'none';
-                
-                // 針對 iOS 顯示具體建議
-                statusText.innerText = "⚠️ 自動下載被攔截 (iOS 省電模式)";
-                retryBtn.style.display = 'inline-block'; // 顯示手動按鈕
+                progressFill.style.backgroundColor = "#c0392b"; // 變紅色
+                progressText.innerText = "下載中斷，請重試";
             }
         }
 
-        // 頁面載入後嘗試自動執行
-        window.onload = () => initModel(false);
-
-        // 處理圖片上傳
         fileInput.addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            // 顯示預覽
-            const originalUrl = URL.createObjectURL(file);
-            originalImg.src = originalUrl;
-            previewArea.style.display = 'flex'; // iPad 上會變成上下排列
+            originalImg.src = URL.createObjectURL(file);
+            previewArea.style.display = 'flex';
             resultImg.src = ''; 
             downloadLink.style.display = 'none';
             
-            // UI 切換為處理中
-            statusBox.classList.remove('ready');
-            statusBox.style.background = '#eef7fc';
-            statusBox.style.color = '#2980b9';
-            statusBox.innerHTML = '<div class="spinner"></div> 正在去背中，請稍候...';
+            // 讓上方進度條顯示 "處理中" 狀態
+            progressContainer.style.display = 'block';
+            progressFill.style.width = "100%";
+            progressFill.style.backgroundColor = "#e67e22"; // 橘色代表處理中
+            progressText.innerText = "⚡ 正在進行 AI 去背運算...";
+            progressPercent.innerText = "";
 
             try {
-                // 正式去背
                 const blob = await imgly.removeBackground(file, config);
                 const url = URL.createObjectURL(blob);
                 
@@ -284,15 +287,13 @@
                 downloadLink.download = 'removed-bg.png';
                 downloadLink.style.display = 'inline-block';
                 
-                // 恢復完成狀態
-                statusBox.classList.add('ready');
-                statusBox.innerHTML = '✨ 處理完成！可以下載了';
+                progressText.innerText = "✨ 處理完成";
+                progressFill.style.backgroundColor = "#27ae60";
 
             } catch (error) {
                 console.error(error);
-                statusBox.classList.add('error');
-                statusBox.innerText = '❌ 處理失敗: ' + error.message;
-                alert("去背發生錯誤，請重新整理網頁再試一次。");
+                progressText.innerText = "❌ 處理失敗";
+                alert("錯誤：" + error.message);
             }
         });
     </script>
