@@ -2,219 +2,311 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Miku AR - Debug Version</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI 一鍵去背 (On-Device)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0"></script>
+
     <style>
-        body { margin: 0; background-color: #000; color: white; font-family: sans-serif; overflow: hidden; }
-        
-        #container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        
-        canvas { position: absolute; left: 0; top: 0; z-index: 1; }
-        video { position: absolute; left: 0; top: 0; z-index: 0; display: none; } /* 隱藏原始 video */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
 
-        /* 介面 UI */
-        #ui-layer { position: absolute; z-index: 10; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
-        
-        h1 { margin: 0; color: #39C5BB; text-shadow: 0 0 5px #39C5BB; font-size: 24px; background: rgba(0,0,0,0.5); display: inline-block; padding: 5px 10px; border-radius: 10px; }
-        
-        #status { background: rgba(0, 0, 0, 0.7); padding: 10px; border-radius: 8px; font-size: 14px; color: #fff; max-width: 90%; word-wrap: break-word; }
+        header {
+            width: 100%;
+            background: white;
+            padding: 20px 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
 
-        /* 開始按鈕 (置中) */
-        #startBtn { 
-            pointer-events: auto; 
-            background: #39C5BB; 
-            color: white; 
-            border: none; 
-            padding: 15px 40px; 
-            font-size: 20px; 
-            border-radius: 30px; 
-            box-shadow: 0 0 15px #39C5BB;
+        h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #111;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            padding-bottom: 40px;
+        }
+
+        /* 上傳區域樣式 */
+        .upload-box {
+            width: 100%;
+            height: 150px;
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .upload-box:active {
+            background-color: #f1f5f9;
+            border-color: #94a3b8;
+        }
+
+        .upload-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        #file-input {
             position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 20;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
             cursor: pointer;
         }
-        #startBtn:active { transform: translate(-50%, -50%) scale(0.95); }
+
+        /* 結果顯示區 */
+        .result-area {
+            width: 100%;
+            display: none; /* 預設隱藏 */
+            flex-direction: column;
+            align-items: center;
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 透明背景格紋效果 */
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            background-image: linear-gradient(45deg, #eee 25%, transparent 25%),
+                              linear-gradient(-45deg, #eee 25%, transparent 25%),
+                              linear-gradient(45deg, transparent 75%, #eee 75%),
+                              linear-gradient(-45deg, transparent 75%, #eee 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn {
+            background-color: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            border: none;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 100%;
+            text-align: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+            display: inline-block;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        /* 載入動畫 */
+        #status-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-    <div id="container">
-        <video id="video" playsinline muted autoplay></video>
-        <canvas id="output"></canvas>
-        
-        <div id="ui-layer">
-            <h1>MIKU AR SYSTEM</h1>
-            <div id="status">等待使用者啟動...</div>
+    <div id="status-modal">
+        <div class="spinner"></div>
+        <h3 id="status-text">正在下載 AI 模型...</h3>
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">(初次載入較慢，請稍候)</p>
+    </div>
+
+    <header>
+        <h1>AI 拍立得去背機</h1>
+        <div class="subtitle">Client-side AI • Privacy First</div>
+    </header>
+
+    <div class="container">
+        <div class="upload-box">
+            <input type="file" id="file-input" accept="image/*">
+            <div class="upload-icon">📷</div>
+            <div style="font-weight: 500; color: #475569;">點擊拍照或上傳圖片</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 5px;">支援離線運算</div>
         </div>
-        
-        <button id="startBtn" onclick="startApp()">點擊開始 (Start)</button>
+
+        <div class="result-area" id="result-area">
+            <div style="width:100%; display:flex; justify-content:space-between; margin-bottom:10px;">
+                <span style="font-weight:bold; color:#2563eb;">去背結果：</span>
+                <span style="font-size:12px; color:#666;" id="process-time"></span>
+            </div>
+            
+            <canvas id="output-canvas"></canvas>
+            
+            <a id="download-btn" class="btn" download="removed-bg.png">下載 PNG 圖片</a>
+            <button onclick="location.reload()" style="background:transparent; border:none; color:#666; margin-top:15px; text-decoration:underline;">再試一張</button>
+        </div>
     </div>
 
     <script>
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('output');
-        const ctx = canvas.getContext('2d');
-        const statusDiv = document.getElementById('status');
-        const startBtn = document.getElementById('startBtn');
-        let net;
-        let isRunning = false;
+        const statusModal = document.getElementById('status-modal');
+        const statusText = document.getElementById('status-text');
+        const fileInput = document.getElementById('file-input');
+        const resultArea = document.getElementById('result-area');
+        const canvas = document.getElementById('output-canvas');
+        const downloadBtn = document.getElementById('download-btn');
+        let net = null;
 
-        function log(msg) {
-            statusDiv.innerHTML = msg;
-            console.log(msg);
-        }
-
-        async function startApp() {
-            startBtn.style.display = 'none'; // 隱藏按鈕
-            log("正在初始化... 請允許攝影機權限");
-
+        // 1. 載入 BodyPix 模型
+        async function loadModel() {
             try {
-                // 1. 設定攝影機
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: false,
-                    video: { facingMode: 'user', width: 640, height: 480 }
-                });
-                video.srcObject = stream;
-                
-                // 等待影片載入
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        video.play();
-                        resolve();
-                    };
-                });
-
-                // 設定 Canvas 尺寸
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-
-                log("攝影機已啟動。正在下載 AI 模型 (首次需 10-20 秒)...");
-
-                // 2. 載入模型 (使用更輕量的設定)
-                net = await posenet.load({
+                // 使用 MobileNetV1 架構，適合手機，速度快
+                net = await bodyPix.load({
                     architecture: 'MobileNetV1',
                     outputStride: 16,
-                    inputResolution: { width: 320, height: 240 }, // 降低解析度以加速
-                    multiplier: 0.5 // 降低乘數以加速 (0.5 最快)
+                    multiplier: 0.75, // 0.75 較輕量，0.5 更快但較不準，1.0 最準但慢
+                    quantBytes: 2
                 });
-
-                log("系統啟動完成！可開啟飛航模式 (Offline Mode Ready)");
-                isRunning = true;
-                detectFrame();
-
-            } catch (err) {
-                log("<span style='color:red'>錯誤: " + err.message + "<br>請確認網址是 https 或 localhost</span>");
-                startBtn.style.display = 'block'; // 顯示按鈕讓使用者重試
-                startBtn.innerText = "重試 (Retry)";
-            }
-        }
-
-        async function detectFrame() {
-            if (!isRunning) return;
-
-            // 調整 Canvas 繪圖比例
-            const videoRatio = video.videoWidth / video.videoHeight;
-            const screenRatio = canvas.width / canvas.height;
-            let drawWidth, drawHeight, startX, startY;
-
-            if (screenRatio > videoRatio) {
-                drawWidth = canvas.width;
-                drawHeight = canvas.width / videoRatio;
-                startX = 0;
-                startY = (canvas.height - drawHeight) / 2;
-            } else {
-                drawHeight = canvas.height;
-                drawWidth = canvas.height * videoRatio;
-                startX = (canvas.width - drawWidth) / 2;
-                startY = 0;
-            }
-
-            // 繪製影像背景 (鏡像)
-            ctx.save();
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
-            ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, startX, startY, drawWidth, drawHeight);
-            ctx.restore();
-
-            // AI 偵測
-            const pose = await net.estimateSinglePose(video, { flipHorizontal: false });
-
-            // 繪製 Miku 雙馬尾
-            drawAugmentedReality(pose.keypoints, startX, startY, drawWidth, drawHeight);
-
-            requestAnimationFrame(detectFrame);
-        }
-
-        function drawAugmentedReality(keypoints, sx, sy, dw, dh) {
-            // 座標轉換函式 (因為 Canvas 有縮放，需要把 AI 的座標轉成螢幕座標)
-            // 注意：因為我們將畫面做了鏡像翻轉，X 軸計算要小心
-            const mapX = (x) => canvas.width - (sx + (x / video.videoWidth) * dw); 
-            const mapY = (y) => sy + (y / video.videoHeight) * dh;
-
-            const leftEar = keypoints.find(k => k.part === 'leftEar');
-            const rightEar = keypoints.find(k => k.part === 'rightEar');
-
-            if (leftEar && rightEar && leftEar.score > 0.4 && rightEar.score > 0.4) {
-                const lx = mapX(leftEar.position.x);
-                const ly = mapY(leftEar.position.y);
-                const rx = mapX(rightEar.position.x);
-                const ry = mapY(rightEar.position.y);
-
-                // 計算頭部參數
-                const earDist = Math.hypot(lx - rx, ly - ry); // 兩耳距離
-                const angle = Math.atan2(ry - ly, rx - lx); // 頭部傾斜角度
-
-                // 開始繪圖
-                ctx.save();
                 
-                // 1. 設定雙馬尾樣式
-                ctx.fillStyle = "rgba(57, 197, 187, 0.7)"; // Miku Green 半透明
-                ctx.strokeStyle = "#39C5BB";
-                ctx.lineWidth = 3;
-
-                // 2. 繪製左馬尾 (在畫面右邊，因為鏡像)
-                drawPigtail(ctx, lx, ly, earDist, angle, -1);
-                // 3. 繪製右馬尾
-                drawPigtail(ctx, rx, ry, earDist, angle, 1);
-
-                ctx.restore();
+                statusModal.classList.add('hidden');
+                console.log('Model loaded');
+            } catch (err) {
+                statusText.innerText = "模型載入失敗，請檢查網路";
+                console.error(err);
             }
         }
 
-        function drawPigtail(ctx, x, y, size, angle, dir) {
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(angle); // 跟隨頭部旋轉
+        // 2. 處理圖片
+        fileInput.addEventListener('change', async function(e) {
+            if (e.target.files.length === 0) return;
+
+            const file = e.target.files[0];
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+
+            img.onload = async function() {
+                // 顯示處理中狀態
+                statusText.innerText = "AI 正在去背中...";
+                statusModal.classList.remove('hidden');
+                
+                // 給 UI 一點時間渲染
+                setTimeout(async () => {
+                    await removeBackground(img);
+                }, 100);
+            };
+            img.src = url;
+        });
+
+        // 3. 去背邏輯
+        async function removeBackground(imgElement) {
+            const startTime = performance.now();
+
+            // 設定 Canvas 大小
+            // 為了效能，手機上如果圖片太大可以稍微縮小，這裡維持原圖或限制最大寬度
+            const maxWidth = 800;
+            let width = imgElement.width;
+            let height = imgElement.height;
             
-            const w = size * 0.8; 
-            const h = size * 5.0; // 馬尾長度
+            if (width > maxWidth) {
+                height = height * (maxWidth / width);
+                width = maxWidth;
+            }
 
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            // 貝茲曲線畫馬尾
-            ctx.bezierCurveTo(
-                dir * w * 2, h * 0.2, 
-                dir * w * 0.5, h * 0.8, 
-                dir * w, h
-            );
-            ctx.bezierCurveTo(
-                dir * w * -0.2, h * 0.8, 
-                dir * w * 0.8, h * 0.2, 
-                0, 0
-            );
-            ctx.fill();
-            ctx.stroke();
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
 
-            // 髮飾
-            ctx.fillStyle = "#E1008D"; // Magenta
-            ctx.fillRect(dir === 1 ? -5 : -15, -10, 20, 20);
+            // 繪製原圖到 Canvas (為了讓 BodyPix 讀取像素)
+            ctx.drawImage(imgElement, 0, 0, width, height);
 
-            ctx.restore();
+            // 執行分割 (Segmentation)
+            // segmentPerson: 用於分割出單個人體
+            const segmentation = await net.segmentPerson(canvas, {
+                flipHorizontal: false,
+                internalResolution: 'medium', // 'low', 'medium', 'high'
+                segmentationThreshold: 0.7
+            });
+
+            // 取得像素數據
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+
+            // 根據 Mask 修改 Alpha Channel
+            // segmentation.data 是一個陣列，1 代表是人，0 代表背景
+            for (let i = 0; i < data.length; i += 4) {
+                const maskIndex = i / 4;
+                // 如果 Mask 是 0 (背景)，將 Alpha (data[i+3]) 設為 0 (透明)
+                if (segmentation.data[maskIndex] === 0) {
+                    data[i + 3] = 0; 
+                }
+            }
+
+            // 將處理後的像素放回 Canvas
+            ctx.putImageData(imageData, 0, 0);
+
+            // 計算時間
+            const endTime = performance.now();
+            const timeDiff = Math.round(endTime - startTime);
+
+            // 更新 UI
+            statusModal.classList.add('hidden');
+            resultArea.style.display = 'flex';
+            document.querySelector('.upload-box').style.display = 'none'; // 隱藏上傳框
+            document.getElementById('process-time').innerText = `耗時: ${timeDiff} ms`;
+
+            // 設定下載連結
+            downloadBtn.href = canvas.toDataURL('image/png');
         }
+
+        // 初始化
+        loadModel();
+
     </script>
 </body>
 </html>
