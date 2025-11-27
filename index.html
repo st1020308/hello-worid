@@ -3,194 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pro 級 AI 人像去背 (修正版)</title>
+    <title>Pro AI 去背 (通用修正版)</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <style>
-        :root {
-            --primary: #6366f1;
-            --bg: #0f172a;
-            --card: #1e293b;
-            --text: #f8fafc;
-        }
-
-        body {
-            margin: 0;
-            padding: 20px;
-            background-color: var(--bg);
-            color: var(--text);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            box-sizing: border-box;
-        }
-
-        h1 { margin-bottom: 5px; font-weight: 800; letter-spacing: -0.5px; text-align: center; }
-        p { color: #94a3b8; margin-top: 0; font-size: 14px; margin-bottom: 30px; text-align: center; }
-
-        .container {
-            width: 100%;
-            max-width: 480px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        /* 改用 label 標籤，這是修正的核心，保證能觸發 */
-        .upload-card {
-            background: var(--card);
-            border: 2px dashed #475569;
-            border-radius: 16px;
-            padding: 40px 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-            display: block; /* 讓 label 變成區塊 */
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .upload-card:active {
-            border-color: var(--primary);
-            background: #262f45;
-            transform: scale(0.98);
-        }
-
-        .icon { font-size: 48px; margin-bottom: 15px; display: block; }
+        :root { --primary: #6366f1; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; }
+        body { margin: 0; padding: 20px; background-color: var(--bg); color: var(--text); font-family: sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
         
-        /* 隱藏真實的 input，但因為在 label 內，所以點擊 label 依然有效 */
-        #file-input {
-            display: none; 
+        .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 20px; }
+        
+        label.upload-card {
+            background: var(--card); border: 2px dashed #475569; border-radius: 16px; padding: 30px 20px;
+            text-align: center; cursor: pointer; display: block;
         }
-
-        /* 增加一個看起來像按鈕的裝飾 */
-        .fake-btn {
-            background: #334155;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            margin-top: 15px;
-            display: inline-block;
-        }
-
-        /* 結果展示區 */
-        .result-card {
-            background: var(--card);
-            border-radius: 16px;
-            padding: 15px;
-            display: none; /* 預設隱藏 */
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-
+        
+        .result-card { background: var(--card); border-radius: 16px; padding: 15px; display: none; }
+        
+        /* 棋盤格背景 */
         canvas {
-            width: 100%;
-            height: auto;
-            border-radius: 12px;
-            background-image: 
-                linear-gradient(45deg, #333 25%, transparent 25%), 
-                linear-gradient(-45deg, #333 25%, transparent 25%), 
-                linear-gradient(45deg, transparent 75%, #333 75%), 
-                linear-gradient(-45deg, transparent 75%, #333 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-            background-color: #222;
+            width: 100%; height: auto; border-radius: 12px;
+            background-image: linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(-45deg, #444 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #444 75%), linear-gradient(-45deg, transparent 75%, #444 75%);
+            background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; background-color: #333;
         }
 
-        .btn {
-            background: var(--primary);
-            color: white;
-            text-decoration: none;
-            display: block;
-            text-align: center;
-            padding: 14px;
-            border-radius: 12px;
-            font-weight: 600;
-            margin-top: 15px;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-        }
-
-        /* 載入遮罩 */
-        #loader {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(15, 23, 42, 0.98);
-            z-index: 9999; /* 確保在最上層 */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-        }
-
-        .spinner {
-            width: 40px; height: 40px;
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-bottom: 20px;
-        }
+        .btn { background: var(--primary); color: white; display: block; text-align: center; padding: 14px; border-radius: 12px; text-decoration: none; margin-top: 15px; font-weight: bold;}
+        
+        #loader { position: fixed; inset: 0; background: rgba(15,23,42,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 99; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #fff3; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .status-text { color: var(--primary); font-weight: bold; margin-bottom: 5px; }
-        .sub-status { font-size: 12px; color: #64748b; }
-
-        /* 強制關閉按鈕 (萬一卡住) */
-        .force-close {
-            margin-top: 30px;
-            color: #64748b;
-            font-size: 12px;
-            text-decoration: underline;
-            cursor: pointer;
-            opacity: 0;
-            animation: fadeIn 2s 5s forwards; /* 5秒後才出現 */
+        /* 警告訊息 */
+        .warning-box {
+            background: #f59e0b20; border: 1px solid #f59e0b; color: #fbbf24;
+            padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 14px; display: none;
         }
-        @keyframes fadeIn { to { opacity: 1; } }
-
     </style>
 </head>
 <body>
 
     <div id="loader">
         <div class="spinner"></div>
-        <div class="status-text">正在初始化 AI 引擎...</div>
-        <div class="sub-status">首次載入需下載模型，請稍候...</div>
-        <div class="force-close" onclick="document.getElementById('loader').style.display='none'">
-            載入太久？點此直接進入
-        </div>
+        <div style="margin-top:15px; color:#cbd5e1;">正在啟動 AI 核心...</div>
     </div>
 
-    <h1>Pro 級 AI 人像去背</h1>
-    <p>Powered by MediaPipe</p>
+    <h2 style="margin-bottom: 5px;">Pro AI 去背 (修正版)</h2>
+    <p style="color:#94a3b8; font-size: 13px; margin-bottom: 20px;">專用於人像處理 • 像素級修正</p>
 
     <div class="container">
-        
         <label class="upload-card" id="upload-box">
-            <span class="icon">✨</span>
-            <div style="font-weight:bold; font-size:18px; margin-bottom:5px;">點擊此處選擇照片</div>
-            <div style="color:#94a3b8; font-size:13px;">支援相簿上傳或直接拍照</div>
-            <div class="fake-btn">選擇檔案</div>
-            
-            <input type="file" id="file-input" accept="image/*">
+            <div style="font-size: 40px;">📸</div>
+            <div style="margin:10px 0; font-weight:bold;">點擊選擇照片</div>
+            <div style="font-size:12px; color:#94a3b8;">請確保照片中有明顯的「人物」</div>
+            <input type="file" id="file-input" accept="image/*" style="display:none;">
         </label>
 
         <div class="result-card" id="result-card">
-            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                <span style="font-size:14px; color:#cbd5e1;">處理結果</span>
-                <span style="font-size:12px; color:#64748b;" id="time-log"></span>
-            </div>
+            <div class="warning-box" id="warning-msg">⚠️ 偵測不到人物，顯示原圖</div>
             <canvas id="output-canvas"></canvas>
-            <a id="download-btn" class="btn" download="ai-cutout.png">下載 PNG (透明背景)</a>
-            <div style="text-align:center; margin-top:15px;">
-                <button onclick="location.reload()" style="background:none; border:none; color:#64748b; text-decoration:underline; cursor:pointer; font-size:14px;">試試另一張</button>
+            <a id="download-btn" class="btn" download="result.png">下載圖片</a>
+            <div style="text-align:center; margin-top:10px;">
+                <button onclick="location.reload()" style="background:none; border:none; color:#94a3b8; text-decoration:underline; padding:10px;">重試</button>
             </div>
         </div>
-
     </div>
 
     <canvas id="temp-canvas" style="display:none;"></canvas>
@@ -198,123 +73,112 @@
     <script>
         const loader = document.getElementById('loader');
         const fileInput = document.getElementById('file-input');
-        const resultCard = document.getElementById('result-card');
-        const uploadBox = document.getElementById('upload-box');
         const outputCanvas = document.getElementById('output-canvas');
-        const outputCtx = outputCanvas.getContext('2d');
         const tempCanvas = document.getElementById('temp-canvas');
-        const tempCtx = tempCanvas.getContext('2d');
+        const warningMsg = document.getElementById('warning-msg');
         
         let selfieSegmentation = null;
-        let isModelReady = false;
 
-        // 1. 初始化 MediaPipe
         async function initAI() {
             try {
-                selfieSegmentation = new SelfieSegmentation({locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
-                }});
-
-                selfieSegmentation.setOptions({
-                    modelSelection: 1, 
-                    selfieMode: false,
-                });
-
-                selfieSegmentation.onResults(onResults);
-
-                // 2. 預熱模型
-                const dummyImg = new Image();
-                dummyImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                selfieSegmentation = new SelfieSegmentation({locateFile: (file) => 
+                    `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`});
                 
-                dummyImg.onload = async () => {
-                    await selfieSegmentation.send({image: dummyImg});
-                    // 完成後隱藏 Loader
+                selfieSegmentation.setOptions({ modelSelection: 1 });
+                selfieSegmentation.onResults(onResults);
+                
+                // 預熱
+                const img = new Image();
+                img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                img.onload = () => selfieSegmentation.send({image: img}).then(() => {
                     loader.style.display = 'none';
-                    isModelReady = true;
-                    console.log("AI Ready");
-                };
-
-                // 安全機制：如果 8 秒還沒載入完，強制關閉 Loader，讓使用者至少能操作介面
-                // (雖然這時點照片可能沒反應，但至少不會卡死)
-                setTimeout(() => {
-                    if (!isModelReady) {
-                        loader.style.display = 'none';
-                        // 可以跳個提示說網路可能太慢
-                        console.log("Force hide loader due to timeout");
-                    }
-                }, 8000);
-
-            } catch (e) {
-                alert("初始化失敗，請檢查網路");
+                });
+            } catch(e) {
+                alert("模型載入失敗");
                 loader.style.display = 'none';
-                console.error(e);
             }
         }
 
-        // 3. 處理使用者圖片
         fileInput.addEventListener('change', (e) => {
             if(e.target.files.length === 0) return;
-            
-            // 如果使用者很快就點了，但模型還沒好
-            if (!isModelReady && !selfieSegmentation) {
-                alert("AI 模型正在下載中，請稍候再試一次（請保持網路連線）");
-                return;
-            }
-
-            const file = e.target.files[0];
-            const url = URL.createObjectURL(file);
             const img = new Image();
-            
-            img.onload = async () => {
+            img.onload = () => {
                 loader.style.display = 'flex';
-                document.querySelector('.status-text').innerText = "AI 正在去背中...";
-                document.querySelector('.sub-status').innerText = "處理高畫質影像...";
-                document.querySelector('.force-close').style.display = 'none'; // 處理中不顯示強制關閉
+                // 限制尺寸以防崩潰
+                const max = 1024;
+                let w = img.width, h = img.height;
+                if(w > max) { h = Math.round(h*(max/w)); w = max; }
                 
-                // 限制尺寸優化效能
-                const MAX_WIDTH = 1024;
-                let w = img.width;
-                let h = img.height;
-                if(w > MAX_WIDTH) {
-                    h = Math.round(h * (MAX_WIDTH / w));
-                    w = MAX_WIDTH;
-                }
+                outputCanvas.width = w; outputCanvas.height = h;
+                tempCanvas.width = w; tempCanvas.height = h;
                 
-                outputCanvas.width = w;
-                outputCanvas.height = h;
-                tempCanvas.width = w;
-                tempCanvas.height = h;
-
-                tempCtx.drawImage(img, 0, 0, w, h);
-                await selfieSegmentation.send({image: tempCanvas});
-            }
-            img.src = url;
+                const ctx = tempCanvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                selfieSegmentation.send({image: tempCanvas});
+            };
+            img.src = URL.createObjectURL(e.target.files[0]);
         });
 
-        // 4. 接收 AI 結果
         function onResults(results) {
-            outputCtx.save();
-            outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+            const width = results.image.width;
+            const height = results.image.height;
+            const ctx = outputCanvas.getContext('2d');
 
-            // 繪製 Mask
-            outputCtx.drawImage(results.segmentationMask, 0, 0, outputCanvas.width, outputCanvas.height);
-
-            // 合成模式
-            outputCtx.globalCompositeOperation = 'source-in';
-            outputCtx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
-
-            outputCtx.restore();
-
-            loader.style.display = 'none';
-            uploadBox.style.display = 'none';
-            resultCard.style.display = 'block';
+            ctx.clearRect(0, 0, width, height);
+            ctx.drawImage(results.image, 0, 0, width, height);
             
+            // 取得圖片像素
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const pixelData = imageData.data;
+            
+            // 處理 Mask：MediaPipe Mask 是一個 ImageBitmap
+            // 我們需要把它畫到另一個 Canvas 才能讀取數據
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = width;
+            maskCanvas.height = height;
+            const maskCtx = maskCanvas.getContext('2d');
+            maskCtx.drawImage(results.segmentationMask, 0, 0, width, height);
+            const maskData = maskCtx.getImageData(0, 0, width, height).data;
+
+            let personPixelCount = 0;
+            const totalPixels = width * height;
+
+            // 像素級混合 (最穩定的方法)
+            for (let i = 0; i < totalPixels; i++) {
+                // maskData 的 R, G, B 都是一樣的值 (0~255)
+                // 255 = 人, 0 = 背景 (或是半透明)
+                const maskValue = maskData[i * 4]; 
+                
+                // 如果 Mask 值大於 10 (很寬鬆)，就當作是人
+                if (maskValue > 10) {
+                    // 把原本圖片的 Alpha 值設為 maskValue (實現柔邊)
+                    pixelData[i * 4 + 3] = maskValue; 
+                    personPixelCount++;
+                } else {
+                    // 沒人 -> 透明
+                    pixelData[i * 4 + 3] = 0;
+                }
+            }
+
+            // 判斷是否偵測失敗
+            const personRatio = personPixelCount / totalPixels;
+            if (personRatio < 0.01) { // 畫面中不到 1% 是人
+                warningMsg.style.display = 'block';
+                warningMsg.innerText = "⚠️ 偵測不到人物，請試著上傳有明顯人像的照片";
+                // 恢復原圖顯示，不要給透明圖
+                ctx.drawImage(results.image, 0, 0, width, height);
+            } else {
+                warningMsg.style.display = 'none';
+                ctx.putImageData(imageData, 0, 0);
+            }
+
+            document.getElementById('upload-box').style.display = 'none';
+            document.getElementById('result-card').style.display = 'block';
             document.getElementById('download-btn').href = outputCanvas.toDataURL('image/png');
-            document.getElementById('time-log').innerText = "完成";
+            loader.style.display = 'none';
         }
 
         initAI();
-
     </script>
 </body>
 </html>
