@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 智能去背 (手機版)</title>
-    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.0.4/dist/imgly-background-removal.min.js"></script>
+    <title>AI 智能去背 (修復版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.0.5/dist/imgly-background-removal.min.js"></script>
     <style>
         :root {
             --primary-color: #4285f4;
@@ -25,15 +25,11 @@
             min-height: 100vh;
         }
 
-        h1 {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-            color: #202124;
-        }
+        h1 { font-size: 1.5rem; margin-bottom: 20px; color: #202124; }
 
         .container {
             width: 100%;
-            max-width: 480px; /* 手機版寬度限制 */
+            max-width: 480px;
             background: var(--card-bg);
             padding: 20px;
             border-radius: 16px;
@@ -66,21 +62,12 @@
             cursor: pointer;
             width: 100%;
             margin-top: 10px;
-            display: none; /* 預設隱藏，有結果才顯示 */
-        }
-        
-        .btn:disabled {
-            background-color: #ccc;
-        }
-
-        #fileInput {
             display: none;
         }
 
-        .preview-container {
-            margin-top: 20px;
-            display: none;
-        }
+        #fileInput { display: none; }
+
+        .preview-container { margin-top: 20px; display: none; }
 
         img {
             max-width: 100%;
@@ -96,6 +83,9 @@
             margin-top: 15px;
             font-size: 0.9rem;
             color: #666;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 8px;
         }
 
         .spinner {
@@ -110,31 +100,38 @@
             margin-right: 8px;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .status-text {
-            font-size: 0.8rem;
-            color: #888;
-            margin-top: 10px;
+        /* 錯誤訊息顯示區 */
+        #debugConsole {
+            text-align: left;
+            font-size: 12px;
+            color: red;
+            background: #fff0f0;
+            padding: 10px;
+            margin-top: 20px;
+            border-radius: 8px;
+            display: none;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
     </style>
 </head>
 <body>
 
-    <h1>AI 去除背景</h1>
+    <h1>AI 去除背景 (Web)</h1>
 
     <div class="container">
         <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
             <p>點擊上傳圖片 或 拖曳至此</p>
-            <span style="font-size: 0.8rem; color: #888;">支援 JPG, PNG</span>
+            <span style="font-size: 0.8rem; color: #888;">建議使用電腦版 Chrome 測試</span>
         </div>
         <input type="file" id="fileInput" accept="image/*">
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <span id="loadingText">正在初始化 AI 模型... (初次需較長時間)</span>
+            <span id="loadingText">準備下載模型...</span>
+            <div style="font-size: 10px; color: #999; margin-top: 5px;">(初次執行約需下載 80MB)</div>
         </div>
 
         <div class="preview-container" id="resultContainer">
@@ -142,10 +139,8 @@
             <img id="resultImage" alt="去背結果">
             <button class="btn" id="downloadBtn">下載圖片</button>
         </div>
-        
-        <div class="status-text">
-            Core: imgly-background-removal (On-Device AI)
-        </div>
+
+        <div id="debugConsole"></div>
     </div>
 
     <script>
@@ -156,32 +151,30 @@
         const resultContainer = document.getElementById('resultContainer');
         const resultImage = document.getElementById('resultImage');
         const downloadBtn = document.getElementById('downloadBtn');
+        const debugConsole = document.getElementById('debugConsole');
 
         let isModelLoaded = false;
 
-        // 處理拖曳上傳
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('active');
-        });
+        // 顯示錯誤訊息的輔助函式
+        function logError(msg) {
+            debugConsole.style.display = 'block';
+            debugConsole.textContent += "⚠️ " + msg + "\n";
+            // 如果偵測到是 file:// 協定，給出特別提示
+            if (window.location.protocol === 'file:') {
+                debugConsole.textContent += "\n[重要提示] 偵測到您正在使用 file:// 協定開啟檔案。\n現代瀏覽器基於安全性，通常禁止本地檔案下載 AI 模型或執行 Worker。\n\n請嘗試：\n1. 將此檔案上傳至 GitHub Pages。\n2. 或在 VS Code 安裝 'Live Server' 套件並按 'Go Live' 執行。\n";
+            }
+        }
 
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('active');
-        });
-
+        // 處理拖曳
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('active'); });
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('active');
-            if (e.dataTransfer.files.length > 0) {
-                handleFile(e.dataTransfer.files[0]);
-            }
+            if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
         });
-
-        // 處理點擊上傳
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
-            }
+            if (e.target.files.length > 0) handleFile(e.target.files[0]);
         });
 
         async function handleFile(file) {
@@ -190,42 +183,44 @@
                 return;
             }
 
-            // 重置介面
+            // 重置 UI
             resultContainer.style.display = 'none';
             downloadBtn.style.display = 'none';
+            debugConsole.style.display = 'none';
+            debugConsole.textContent = ''; // 清空舊錯誤
             loading.style.display = 'block';
             
             if (!isModelLoaded) {
-                loadingText.innerText = "正在下載並初始化 AI 模型 (約 100MB)...";
+                loadingText.innerText = "正在初始化並下載模型資源...";
             } else {
-                loadingText.innerText = "正在去除背景...";
+                loadingText.innerText = "正在處理圖片...";
             }
 
             try {
-                // 使用 imgly 進行去背
-                // 設定 publicPath 讓它知道去哪裡抓取 WASM 和 ONNX 檔案
-                // 這裡使用 jsdelivr CDN，第一次執行會下載，之後瀏覽器會快取
+                // 明確指定 Public Path (必須與 script 引入的版本 1.0.5 一致)
+                // 這樣能避免瀏覽器找不到 .wasm 檔案
                 const config = {
-                    publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.0.3/dist/',
+                    publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.0.5/dist/',
+                    debug: true, // 開啟除錯模式
                     progress: (key, current, total) => {
-                        if (!isModelLoaded && total > 0) {
-                             const percent = Math.round((current / total) * 100);
-                             loadingText.innerText = `下載模型資源中 (${percent}%)...`;
+                        // 簡單的進度顯示
+                        if(total > 0) {
+                            const percent = Math.round((current / total) * 100);
+                            loadingText.innerText = `正在下載 ${key}: ${percent}%`;
                         }
                     }
                 };
 
+                // 呼叫 AI 去背
                 const blob = await imglyRemoveBackground(file, config);
                 
-                // 轉換結果為 URL
                 const url = URL.createObjectURL(blob);
                 resultImage.src = url;
                 
-                // 設定下載按鈕
                 downloadBtn.onclick = () => {
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'removed-bg.png';
+                    a.download = 'removed-bg-ai.png';
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
@@ -239,7 +234,8 @@
             } catch (error) {
                 console.error(error);
                 loading.style.display = 'none';
-                alert('處理失敗，請稍後再試或檢查網路連線（初次載入需連網）。');
+                // 將錯誤顯示在畫面上
+                logError(error.message || error);
             }
         }
     </script>
