@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pro 級 AI 人像去背</title>
+    <title>Pro 級 AI 人像去背 (修正版)</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
@@ -28,8 +28,8 @@
             box-sizing: border-box;
         }
 
-        h1 { margin-bottom: 5px; font-weight: 800; letter-spacing: -0.5px; }
-        p { color: #94a3b8; margin-top: 0; font-size: 14px; margin-bottom: 30px; }
+        h1 { margin-bottom: 5px; font-weight: 800; letter-spacing: -0.5px; text-align: center; }
+        p { color: #94a3b8; margin-top: 0; font-size: 14px; margin-bottom: 30px; text-align: center; }
 
         .container {
             width: 100%;
@@ -39,7 +39,7 @@
             gap: 20px;
         }
 
-        /* 上傳區塊 */
+        /* 改用 label 標籤，這是修正的核心，保證能觸發 */
         .upload-card {
             background: var(--card);
             border: 2px dashed #475569;
@@ -49,19 +49,33 @@
             cursor: pointer;
             transition: all 0.2s;
             position: relative;
+            display: block; /* 讓 label 變成區塊 */
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .upload-card:active {
             border-color: var(--primary);
             background: #262f45;
+            transform: scale(0.98);
         }
 
         .icon { font-size: 48px; margin-bottom: 15px; display: block; }
         
+        /* 隱藏真實的 input，但因為在 label 內，所以點擊 label 依然有效 */
         #file-input {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            opacity: 0; cursor: pointer;
+            display: none; 
+        }
+
+        /* 增加一個看起來像按鈕的裝飾 */
+        .fake-btn {
+            background: #334155;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 15px;
+            display: inline-block;
         }
 
         /* 結果展示區 */
@@ -73,7 +87,6 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
-        /* 透明背景網格 */
         canvas {
             width: 100%;
             height: auto;
@@ -85,7 +98,7 @@
                 linear-gradient(-45deg, transparent 75%, #333 75%);
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-            background-color: #222; /* 深色棋盤格 */
+            background-color: #222;
         }
 
         .btn {
@@ -105,8 +118,8 @@
         #loader {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(15, 23, 42, 0.95);
-            z-index: 100;
+            background: rgba(15, 23, 42, 0.98);
+            z-index: 9999; /* 確保在最上層 */
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -127,6 +140,18 @@
         .status-text { color: var(--primary); font-weight: bold; margin-bottom: 5px; }
         .sub-status { font-size: 12px; color: #64748b; }
 
+        /* 強制關閉按鈕 (萬一卡住) */
+        .force-close {
+            margin-top: 30px;
+            color: #64748b;
+            font-size: 12px;
+            text-decoration: underline;
+            cursor: pointer;
+            opacity: 0;
+            animation: fadeIn 2s 5s forwards; /* 5秒後才出現 */
+        }
+        @keyframes fadeIn { to { opacity: 1; } }
+
     </style>
 </head>
 <body>
@@ -134,20 +159,25 @@
     <div id="loader">
         <div class="spinner"></div>
         <div class="status-text">正在初始化 AI 引擎...</div>
-        <div class="sub-status">首次載入需下載約 10MB 模型檔<br>請稍候，完成後即可離線使用</div>
+        <div class="sub-status">首次載入需下載模型，請稍候...</div>
+        <div class="force-close" onclick="document.getElementById('loader').style.display='none'">
+            載入太久？點此直接進入
+        </div>
     </div>
 
     <h1>Pro 級 AI 人像去背</h1>
-    <p>Powered by MediaPipe • Edge Smoothing</p>
+    <p>Powered by MediaPipe</p>
 
     <div class="container">
         
-        <div class="upload-card" id="upload-box">
+        <label class="upload-card" id="upload-box">
             <span class="icon">✨</span>
-            <div style="font-weight:bold; font-size:18px; margin-bottom:5px;">上傳或拍攝照片</div>
-            <div style="color:#94a3b8; font-size:13px;">支援高解析度與髮絲級去背</div>
+            <div style="font-weight:bold; font-size:18px; margin-bottom:5px;">點擊此處選擇照片</div>
+            <div style="color:#94a3b8; font-size:13px;">支援相簿上傳或直接拍照</div>
+            <div class="fake-btn">選擇檔案</div>
+            
             <input type="file" id="file-input" accept="image/*">
-        </div>
+        </label>
 
         <div class="result-card" id="result-card">
             <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
@@ -157,7 +187,7 @@
             <canvas id="output-canvas"></canvas>
             <a id="download-btn" class="btn" download="ai-cutout.png">下載 PNG (透明背景)</a>
             <div style="text-align:center; margin-top:15px;">
-                <button onclick="location.reload()" style="background:none; border:none; color:#64748b; text-decoration:underline; cursor:pointer;">試試另一張</button>
+                <button onclick="location.reload()" style="background:none; border:none; color:#64748b; text-decoration:underline; cursor:pointer; font-size:14px;">試試另一張</button>
             </div>
         </div>
 
@@ -176,6 +206,7 @@
         const tempCtx = tempCanvas.getContext('2d');
         
         let selfieSegmentation = null;
+        let isModelReady = false;
 
         // 1. 初始化 MediaPipe
         async function initAI() {
@@ -185,27 +216,37 @@
                 }});
 
                 selfieSegmentation.setOptions({
-                    modelSelection: 1, // 0: 一般, 1: 風景/高品質 (適合全身)
-                    selfieMode: false, // 我們處理靜態圖片，不需要鏡像
+                    modelSelection: 1, 
+                    selfieMode: false,
                 });
 
                 selfieSegmentation.onResults(onResults);
 
-                // 2. 預熱模型 (Pre-warm)
-                // 這是關鍵：隨便送一張空白圖進去，強迫瀏覽器下載並編譯 WASM
-                // 這樣之後斷網才能真正運作
+                // 2. 預熱模型
                 const dummyImg = new Image();
-                dummyImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // 1x1 透明像素
+                dummyImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
                 
                 dummyImg.onload = async () => {
                     await selfieSegmentation.send({image: dummyImg});
                     // 完成後隱藏 Loader
                     loader.style.display = 'none';
-                    console.log("AI Ready & Warmed up");
+                    isModelReady = true;
+                    console.log("AI Ready");
                 };
 
+                // 安全機制：如果 8 秒還沒載入完，強制關閉 Loader，讓使用者至少能操作介面
+                // (雖然這時點照片可能沒反應，但至少不會卡死)
+                setTimeout(() => {
+                    if (!isModelReady) {
+                        loader.style.display = 'none';
+                        // 可以跳個提示說網路可能太慢
+                        console.log("Force hide loader due to timeout");
+                    }
+                }, 8000);
+
             } catch (e) {
-                alert("模型載入失敗，請檢查網路連線");
+                alert("初始化失敗，請檢查網路");
+                loader.style.display = 'none';
                 console.error(e);
             }
         }
@@ -214,16 +255,23 @@
         fileInput.addEventListener('change', (e) => {
             if(e.target.files.length === 0) return;
             
+            // 如果使用者很快就點了，但模型還沒好
+            if (!isModelReady && !selfieSegmentation) {
+                alert("AI 模型正在下載中，請稍候再試一次（請保持網路連線）");
+                return;
+            }
+
             const file = e.target.files[0];
             const url = URL.createObjectURL(file);
             const img = new Image();
             
             img.onload = async () => {
                 loader.style.display = 'flex';
-                document.querySelector('.status-text').innerText = "AI 正在精細去背中...";
-                document.querySelector('.sub-status').innerText = "Analyzing pixels...";
+                document.querySelector('.status-text').innerText = "AI 正在去背中...";
+                document.querySelector('.sub-status').innerText = "處理高畫質影像...";
+                document.querySelector('.force-close').style.display = 'none'; // 處理中不顯示強制關閉
                 
-                // 調整 Canvas 尺寸 (限制最大尺寸以免手機記憶體不足)
+                // 限制尺寸優化效能
                 const MAX_WIDTH = 1024;
                 let w = img.width;
                 let h = img.height;
@@ -237,45 +285,34 @@
                 tempCanvas.width = w;
                 tempCanvas.height = h;
 
-                // 將圖片繪製到隱藏 Canvas 供讀取
                 tempCtx.drawImage(img, 0, 0, w, h);
-
-                // 發送給 AI
                 await selfieSegmentation.send({image: tempCanvas});
             }
             img.src = url;
         });
 
-        // 4. 接收 AI 結果並合成 (核心畫質優化部分)
+        // 4. 接收 AI 結果
         function onResults(results) {
-            // 清除畫布
             outputCtx.save();
             outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
 
-            // 步驟 A: 繪製分割遮罩 (Mask)
-            // MediaPipe 的 mask 是一個黑白圖，人是白的，背景是黑的
+            // 繪製 Mask
             outputCtx.drawImage(results.segmentationMask, 0, 0, outputCanvas.width, outputCanvas.height);
 
-            // 步驟 B: 使用 'source-in' 混合模式
-            // 這會保留「只有 Mask 存在的地方」的像素，也就是把人切出來
-            // 由於 MediaPipe 的 Mask 帶有灰階過渡 (Anti-aliasing)，這裡會自動產生柔邊效果
+            // 合成模式
             outputCtx.globalCompositeOperation = 'source-in';
-            
-            // 步驟 C: 繪製原圖
             outputCtx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
 
             outputCtx.restore();
 
-            // 更新 UI
             loader.style.display = 'none';
             uploadBox.style.display = 'none';
             resultCard.style.display = 'block';
             
             document.getElementById('download-btn').href = outputCanvas.toDataURL('image/png');
-            document.getElementById('time-log').innerText = "Process complete";
+            document.getElementById('time-log').innerText = "完成";
         }
 
-        // 啟動
         initAI();
 
     </script>
