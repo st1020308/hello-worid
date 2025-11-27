@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 智能圖片去背工具 (修復版)</title>
+    <title>AI 智能圖片去背 (自動預載版)</title>
     <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/imgly-background-removal.min.js"></script>
     <style>
         body {
@@ -16,7 +16,8 @@
             color: #333;
         }
 
-        h1 { color: #2c3e50; margin-bottom: 10px; }
+        h1 { color: #2c3e50; margin-bottom: 5px; }
+        p.subtitle { color: #7f8c8d; margin-bottom: 20px; font-size: 0.9em; }
         
         .container {
             background: white;
@@ -28,37 +29,65 @@
             text-align: center;
         }
 
-        .upload-section {
-            border: 2px dashed #3498db;
-            padding: 40px;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: background 0.3s;
+        /* 狀態列樣式 */
+        .status-bar {
+            background: #fff3e0;
+            color: #d35400;
+            padding: 12px;
+            border-radius: 8px;
             margin-bottom: 20px;
-            position: relative;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s;
+        }
+        
+        .status-bar.ready {
+            background: #e8f8f5;
+            color: #27ae60;
         }
 
-        .upload-section:hover { background-color: #eef7fc; }
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(0,0,0,0.1);
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .upload-section {
+            border: 2px dashed #bdc3c7;
+            padding: 40px;
+            border-radius: 10px;
+            cursor: not-allowed; /* 預設禁止點擊，等模型載入好 */
+            position: relative;
+            opacity: 0.6;
+            transition: all 0.3s;
+        }
+
+        /* 當模型準備好時的樣式 */
+        .upload-section.active {
+            border-color: #3498db;
+            cursor: pointer;
+            opacity: 1;
+            background-color: #fbfbfb;
+        }
+        .upload-section.active:hover { background-color: #eef7fc; }
         
-        /* 讓 input 覆蓋整個區域，確保手機上好點擊 */
         input[type="file"] {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             opacity: 0;
             cursor: pointer;
+            pointer-events: none; /* 預設禁止 */
         }
-
-        .btn {
-            background-color: #3498db;
-            color: white;
-            padding: 10px 25px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            margin-top: 10px;
+        
+        .upload-section.active input[type="file"] {
+            pointer-events: auto; /* 啟用 */
         }
 
         .preview-area {
@@ -67,11 +96,12 @@
             flex-wrap: wrap;
             gap: 20px;
             margin-top: 20px;
+            display: none; /* 預設隱藏 */
         }
 
         .image-box {
             flex: 1;
-            min-width: 300px; /* 手機上會自動換行 */
+            min-width: 280px;
             border: 1px solid #ddd;
             padding: 10px;
             border-radius: 8px;
@@ -89,32 +119,36 @@
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
-
-        #loading {
-            display: none;
-            margin: 20px 0;
-            font-weight: bold;
-            color: #e67e22;
-            padding: 15px;
-            background: #fff3e0;
-            border-radius: 8px;
+        
+        .btn {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>AI 圖片一鍵去背 (修復版)</h1>
-        <p>上傳圖片，瀏覽器自動移除背景 (支援手機/電腦)</p>
+        <h1>AI 圖片一鍵去背</h1>
+        <p class="subtitle">瀏覽器端運算 | 自動預載模型 | 隱私安全</p>
 
-        <div class="upload-section">
-            <p>📷 點擊此處選擇圖片 (JPG, PNG)</p>
+        <div id="statusBar" class="status-bar">
+            <div class="spinner"></div>
+            <span id="statusText">系統初始化中，正在預載 AI 模型...</span>
+        </div>
+
+        <div class="upload-section" id="uploadSection">
+            <p id="uploadText">⏳ 請稍候，正在準備 AI 引擎...</p>
             <input type="file" id="fileInput" accept="image/*">
         </div>
 
-        <div id="loading">準備中...</div>
-
-        <div class="preview-area" id="previewArea" style="display: none;">
+        <div class="preview-area" id="previewArea">
             <div class="image-box">
                 <h3>原始圖片</h3>
                 <img id="originalImg" src="" alt="Original">
@@ -123,60 +157,102 @@
                 <h3>去背結果</h3>
                 <img id="resultImg" src="" alt="Result">
                 <br>
-                <a id="downloadLink" class="btn" style="display:none; background-color:#27ae60;">下載圖片</a>
+                <a id="downloadLink" class="btn" style="display:none;">下載 PNG</a>
             </div>
         </div>
     </div>
 
     <script>
+        const statusBar = document.getElementById('statusBar');
+        const statusText = document.getElementById('statusText');
+        const uploadSection = document.getElementById('uploadSection');
+        const uploadText = document.getElementById('uploadText');
         const fileInput = document.getElementById('fileInput');
+        const previewArea = document.getElementById('previewArea');
         const originalImg = document.getElementById('originalImg');
         const resultImg = document.getElementById('resultImg');
-        const previewArea = document.getElementById('previewArea');
-        const loading = document.getElementById('loading');
         const downloadLink = document.getElementById('downloadLink');
 
+        // 定義全域 Config，確保使用 CDN
+        const config = {
+            publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/",
+            progress: (key, current, total) => {
+                // 計算並顯示進度
+                const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+                // 只有在還沒準備好時才顯示下載進度
+                if (!isModelReady) {
+                    statusText.innerText = `正在下載 AI 組件 (${key}): ${percent}%`;
+                }
+            }
+        };
+
+        let isModelReady = false;
+
+        // --- 自動預載邏輯 (Warm-up) ---
+        async function initModel() {
+            try {
+                // 1x1 像素的透明 PNG (極小，用來觸發模型下載)
+                const dummyImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+                
+                // 執行一次空跑
+                await imgly.removeBackground(dummyImage, config);
+                
+                // 成功後更新 UI
+                isModelReady = true;
+                statusBar.classList.add('ready');
+                statusBar.innerHTML = '✅ AI 模型已準備就緒，處理速度將大幅提升！';
+                
+                uploadSection.classList.add('active');
+                uploadText.innerText = '📷 點擊此處上傳圖片 (JPG, PNG)';
+                
+            } catch (error) {
+                console.error("預載失敗:", error);
+                statusText.innerText = "⚠️ 模型預載失敗，請檢查網路。您仍可嘗試上傳。";
+                // 即使失敗也開放上傳，讓使用者手動觸發重試
+                uploadSection.classList.add('active');
+            }
+        }
+
+        // 頁面載入後立即執行預載
+        window.onload = initModel;
+
+        // --- 處理使用者上傳 ---
         fileInput.addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            // UI 初始化
+            // 顯示預覽
             const originalUrl = URL.createObjectURL(file);
             originalImg.src = originalUrl;
             previewArea.style.display = 'flex';
-            resultImg.src = ''; 
+            resultImg.src = ''; // 清空舊圖
             downloadLink.style.display = 'none';
-            loading.style.display = 'block';
-            loading.innerText = "⏳ 正在初始化 AI 模型 (首次需下載約 40MB)...";
+            
+            // 更新狀態
+            statusBar.classList.remove('ready');
+            statusBar.style.background = '#eef7fc';
+            statusBar.style.color = '#2980b9';
+            statusBar.innerHTML = '<div class="spinner"></div> 正在進行去背運算...';
 
             try {
-                // *** 關鍵修正：指定 publicPath 到 CDN ***
-                const config = {
-                    publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/",
-                    progress: (key, current, total) => {
-                        // 顯示下載進度
-                        const percent = Math.round((current / total) * 100);
-                        if(total > 0) {
-                             loading.innerText = `⏳ 正在下載 AI 組件 (${key}): ${percent}%`;
-                        }
-                    }
-                };
-
-                // 執行去背
+                // 正式執行去背 (因為模型已載入，這次會很快)
                 const blob = await imgly.removeBackground(file, config);
                 
-                // 處理結果
                 const url = URL.createObjectURL(blob);
                 resultImg.src = url;
                 downloadLink.href = url;
                 downloadLink.download = 'removed-bg.png';
                 downloadLink.style.display = 'inline-block';
-                loading.style.display = 'none';
+                
+                statusBar.classList.add('ready');
+                statusBar.innerHTML = '✨ 處理完成！';
 
             } catch (error) {
-                console.error("詳細錯誤:", error);
-                loading.innerText = "❌ 發生錯誤：" + error.message;
-                alert("去背失敗！請確認網路連線正常 (需要下載模型)");
+                console.error(error);
+                statusBar.style.background = '#fadbd8';
+                statusBar.style.color = '#c0392b';
+                statusBar.innerText = '❌ 處理失敗，請重試';
+                alert("錯誤：" + error.message);
             }
         });
     </script>
